@@ -64,6 +64,7 @@ try:
     from gensim.models._utils_any2vec import (
         compute_ngrams,
         compute_ngrams_bytes,
+        ft_hash_phrase,
         ft_hash_broken,
         ft_hash_bytes,
     )
@@ -99,6 +100,46 @@ def ft_ngram_hashes(word, minn, maxn, num_buckets, fb_compatible=True):
     else:
         text_ngrams = compute_ngrams(word, minn, maxn)
         hashes = [ft_hash_broken(n) % num_buckets for n in text_ngrams]
+    return hashes
+
+def compute_phrase_ngrams(phrase, split_char):
+    """Get the list of all possible ngrams for a given phrase.
+
+    Parameters
+    ----------
+    word : str
+        The phrase whose ngrams need to be computed.
+
+    Returns
+    -------
+    list of str
+        Sequence of word ngrams.
+
+    """
+    words = phrase.split(split_char)
+    ngrams = []
+    for ngram_length in range(1, len(words) + 1):
+        for i in range(0, len(words) - ngram_length + 1):
+            ngrams.append(words[i:i + ngram_length])
+    return ngrams
+
+def ft_ngram_phrase_hashes(word, split_char, num_buckets):
+    """Calculate the ngrams of the word and hash them.
+
+    Parameters
+    ----------
+    word : str
+        The word to calculate ngram hashes for.
+    num_buckets : int
+        The number of buckets
+
+    Returns
+    -------
+        A list of hashes (integers), one per each detected ngram.
+
+    """
+    text_ngrams = compute_phrase_ngrams(word, split_char)
+    hashes = [ft_hash_phrase(n) % num_buckets for n in text_ngrams]
     return hashes
 
 
