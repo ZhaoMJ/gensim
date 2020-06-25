@@ -18,12 +18,12 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 from gensim.models.fasttext_inner cimport (
-    fasttext_fast_sentence_sg_hs,
-    fasttext_fast_sentence_sg_neg,
-    fasttext_fast_sentence_cbow_hs,
-    fasttext_fast_sentence_cbow_neg,
+    ngramphrase_fast_sentence_sg_hs,
+    ngramphrase_fast_sentence_sg_neg,
+    ngramphrase_fast_sentence_cbow_hs,
+    ngramphrase_fast_sentence_cbow_neg,
     init_ft_config,
-    FastTextConfig
+    NgramPhraseConfig
 )
 
 from gensim.models.word2vec_inner cimport random_int32
@@ -117,7 +117,7 @@ def train_epoch_sg(
         Number of words in the vocabulary actually used for training (They already existed in the vocabulary
         and were not discarded by negative sampling).
     """
-    cdef FastTextConfig c
+    cdef NgramPhraseConfig c
 
     # For learning rate updates
     cdef int cur_epoch = _cur_epoch
@@ -169,9 +169,9 @@ def train_epoch_sg(
                         if j == i:
                             continue
                         if c.hs:
-                            fasttext_fast_sentence_sg_hs(&c, i, j)
+                            ngramphrase_fast_sentence_sg_hs(&c, i, j)
                         if c.negative:
-                            fasttext_fast_sentence_sg_neg(&c, i, j)
+                            ngramphrase_fast_sentence_sg_neg(&c, i, j)
 
             total_sentences += sentences.size()
             total_effective_words += effective_words
@@ -207,7 +207,7 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
         Number of words in the vocabulary actually used for training (They already existed in the vocabulary
         and were not discarded by negative sampling).
     """
-    cdef FastTextConfig c
+    cdef NgramPhraseConfig c
 
     # For learning rate updates
     cdef int cur_epoch = _cur_epoch
@@ -257,9 +257,9 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
                         k = idx_end
 
                     if c.hs:
-                        fasttext_fast_sentence_cbow_hs(&c, i, j, k)
+                        ngramphrase_fast_sentence_cbow_hs(&c, i, j, k)
                     if c.negative:
-                        fasttext_fast_sentence_cbow_neg(&c, i, j, k)
+                        ngramphrase_fast_sentence_cbow_neg(&c, i, j, k)
 
             total_sentences += sentences.size()
             total_effective_words += effective_words

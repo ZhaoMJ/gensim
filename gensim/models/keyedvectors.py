@@ -183,7 +183,7 @@ from gensim.utils import deprecated
 from gensim.models.utils_any2vec import (
     _save_word2vec_format,
     _load_word2vec_format,
-    ft_ngram_hashes,
+    ft_ngram_phrase_hashes,
 )
 from gensim.similarities.termsim import TermSimilarityIndex, SparseTermSimilarityMatrix
 
@@ -1551,9 +1551,6 @@ class Word2VecKeyedVectors(WordEmbeddingsKeyedVectors):
     @classmethod
     def load(cls, fname_or_handle, **kwargs):
         model = super(WordEmbeddingsKeyedVectors, cls).load(fname_or_handle, **kwargs)
-        if isinstance(model, FastTextKeyedVectors):
-            if not hasattr(model, 'compatible_hash'):
-                model.compatible_hash = False
 
         return model
 
@@ -1952,8 +1949,7 @@ class Doc2VecKeyedVectors(BaseKeyedVectors):
         else:
             return max_rawint + 1 + doctags[index].offset
 
-
-class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
+class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
     """Vectors and vocab for :class:`~gensim.models.fasttext.FastText`.
 
     Implements significant parts of the FastText algorithm.  For example,
@@ -1975,15 +1971,8 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
     ----------
     vector_size : int
         The dimensionality of all vectors.
-    min_n : int
-        The minimum number of characters in an ngram
-    max_n : int
-        The maximum number of characters in an ngram
     bucket : int
         The number of buckets.
-    compatible_hash : boolean
-        If True, uses the Facebook-compatible hash function instead of the
-        Gensim backwards-compatible hash function.
 
     Attributes
     ----------
@@ -2005,17 +1994,17 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
         Maps vocabulary items (by their index) to the buckets they occur in.
 
     """
-    def __init__(self, vector_size, min_n, max_n, bucket, compatible_hash):
-        super(FastTextKeyedVectors, self).__init__(vector_size=vector_size)
+    # FIXME
+    def __init__(self, vector_size, split_char, bucket):
+        super(NgramPhraseKeyedVectors, self).__init__(vector_size=vector_size)
         self.vectors_vocab = None
         self.vectors_vocab_norm = None
         self.vectors_ngrams = None
         self.vectors_ngrams_norm = None
         self.buckets_word = None
-        self.min_n = min_n
-        self.max_n = max_n
+        self.buckets_weights = None
+        self.split_char = split_char
         self.bucket = bucket
-        self.compatible_hash = compatible_hash
 
     @classmethod
     def load(cls, fname_or_handle, **kwargs):
@@ -2073,6 +2062,7 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
             False
 
         """
+        # FIXME 
         return True
 
     def save(self, *args, **kwargs):
@@ -2085,7 +2075,7 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
 
         See Also
         --------
-        :meth:`~gensim.models.keyedvectors.FastTextKeyedVectors.load`
+        :meth:`~gensim.models.keyedvectors.NgramPhraseKeyedVectors.load`
             Load object.
 
         """
@@ -2098,7 +2088,7 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
             'hash2index',
         ]
         kwargs['ignore'] = kwargs.get('ignore', ignore_attrs)
-        super(FastTextKeyedVectors, self).save(*args, **kwargs)
+        super(NgramPhraseKeyedVectors, self).save(*args, **kwargs)
 
     def word_vec(self, word, use_norm=False):
         """Get `word` representations in vector space, as a 1D numpy array.
@@ -2122,13 +2112,15 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
 
         """
         if word in self.vocab:
-            return super(FastTextKeyedVectors, self).word_vec(word, use_norm)
+            return super(NgramPhraseKeyedVectors, self).word_vec(word, use_norm)
         elif self.bucket == 0:
             raise KeyError('cannot calculate vector for OOV word without ngrams')
         else:
             word_vec = np.zeros(self.vectors_ngrams.shape[1], dtype=REAL)
-            ngram_hashes = ft_ngram_hashes(word, self.min_n, self.max_n, self.bucket, self.compatible_hash)
+            # FIXME
+            ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
             if len(ngram_hashes) == 0:
+                #FIXME
                 #
                 # If it is impossible to extract _any_ ngrams from the input
                 # word, then the best we can do is return a vector that points
@@ -2139,8 +2131,8 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
                 #
                 logger.warning('could not extract any ngrams from %r, returning origin vector', word)
                 return word_vec
-            for nh in ngram_hashes:
-                word_vec += self.vectors_ngrams[nh]
+            for i, nh in enumerate(ngram_hashes):
+                word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
             result = word_vec / len(ngram_hashes)
             if use_norm:
                 result /= sqrt(sum(result ** 2))
@@ -2158,11 +2150,11 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
         --------
         You **cannot continue training** after doing a replace.
         The model becomes effectively read-only: you can call
-        :meth:`~gensim.models.keyedvectors.FastTextKeyedVectors.most_similar`,
-        :meth:`~gensim.models.keyedvectors.FastTextKeyedVectors.similarity`, etc., but not train.
+        :meth:`~gensim.models.keyedvectors.NgramPhraseKeyedVectors.most_similar`,
+        :meth:`~gensim.models.keyedvectors.NgramPhraseKeyedVectors.similarity`, etc., but not train.
 
         """
-        super(FastTextKeyedVectors, self).init_sims(replace)
+        super(NgramPhraseKeyedVectors, self).init_sims(replace)
         if getattr(self, 'vectors_ngrams_norm', None) is None or replace:
             logger.info("precomputing L2-norms of ngram weight vectors")
             self.vectors_ngrams_norm = _l2_norm(self.vectors_ngrams, replace=replace)
@@ -2203,12 +2195,10 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been fully initialized.
 
         """
-        self.buckets_word = _process_fasttext_vocab(
+        self.buckets_word, self.buckets_weights = _process_ngramphrase_vocab(
             self.vocab.items(),
-            self.min_n,
-            self.max_n,
-            self.bucket,
-            self.compatible_hash,
+            self.split_char,
+            self.bucket
         )
 
         rand_obj = np.random
@@ -2228,6 +2218,7 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
         #    vectors_ngrams, and vectors_vocab cannot happen at construction
         #    time because the vocab is not initialized at that stage.
         #
+        
         self.vectors_ngrams = rand_obj.uniform(lo, hi, ngrams_shape).astype(REAL)
 
     def update_ngrams_weights(self, seed, old_vocab_len):
@@ -2245,12 +2236,10 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been updated.
 
         """
-        self.buckets_word = _process_fasttext_vocab(
+        self.buckets_word, self.buckets_weights = _process_ngramphrase_vocab(
             self.vocab.items(),
-            self.min_n,
-            self.max_n,
-            self.bucket,
-            self.compatible_hash,
+            self.split_char,
+            self.bucket
         )
 
         rand_obj = np.random
@@ -2303,9 +2292,10 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
 
         for w, v in self.vocab.items():
             word_vec = np.copy(self.vectors_vocab[v.index])
-            ngram_hashes = ft_ngram_hashes(w, self.min_n, self.max_n, self.bucket, self.compatible_hash)
-            for nh in ngram_hashes:
-                word_vec += self.vectors_ngrams[nh]
+            #FIXME
+            ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(w, self.split_char, self.bucket)
+            for i, nh in enumerate(ngram_hashes):
+                word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
             word_vec /= len(ngram_hashes) + 1
             self.vectors[v.index] = word_vec
 
@@ -2314,8 +2304,7 @@ class FastTextKeyedVectors(WordEmbeddingsKeyedVectors):
     def num_ngram_vectors(self):
         return self.bucket
 
-
-def _process_fasttext_vocab(iterable, min_n, max_n, num_buckets, compatible_hash):
+def _process_ngramphrase_vocab(iterable, split_char, num_buckets):
     """
     Performs a common operation for FastText weight initialization and
     updates: scan the vocabulary, calculate ngrams and their hashes, keep
@@ -2326,15 +2315,8 @@ def _process_fasttext_vocab(iterable, min_n, max_n, num_buckets, compatible_hash
     ----------
     iterable : list
         A list of (word, :class:`Vocab`) tuples.
-    min_n : int
-        The minimum length of ngrams.
-    max_n : int
-        The maximum length of ngrams.
     num_buckets : int
         The number of buckets used by the model.
-    compatible_hash : boolean
-        True for compatibility with the Facebook implementation.
-        False for compatibility with the old Gensim implementation.
 
     Returns
     -------
@@ -2345,17 +2327,18 @@ def _process_fasttext_vocab(iterable, min_n, max_n, num_buckets, compatible_hash
 
     """
     word_indices = {}
+    ngram_lens = {}
 
     if num_buckets == 0:
-        return {v.index: np.array([], dtype=np.uint32) for w, v in iterable}
+        # FIXME
+        return {v.index: np.array([], dtype=np.uint32) for w, v in iterable}, ngram_lens
 
     for word, vocab in iterable:
-        wi = []
-        for ngram_hash in ft_ngram_hashes(word, min_n, max_n, num_buckets, compatible_hash):
-            wi.append(ngram_hash)
-        word_indices[vocab.index] = np.array(wi, dtype=np.uint32)
+        hashes, lengths = ft_ngram_phrase_hashes(word, split_char, num_buckets)
+        word_indices[vocab.index] = np.array(hashes, dtype=np.uint32)
+        ngram_lens[vocab.index] = np.array(lengths, dtype=np.float32)
 
-    return word_indices
+    return word_indices, ngram_lens
 
 
 def _pad_random(m, new_rows, rand):

@@ -140,7 +140,8 @@ def ft_ngram_phrase_hashes(word, split_char, num_buckets):
     """
     text_ngrams = compute_phrase_ngrams(word, split_char)
     hashes = [ft_hash_phrase(n) % num_buckets for n in text_ngrams]
-    return hashes
+    lengths = [len(n) for n in text_ngrams]
+    return hashes, lengths
 
 
 def _save_word2vec_format(fname, vocab, vectors, fvocab=None, binary=False, total_vec=None):

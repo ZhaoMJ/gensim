@@ -9,6 +9,8 @@
 *.pyc
 *.pyo
 *.pyd
+*.cpp
+*.c
 
 # Packages #
 ############
@@ -76,3 +78,5 @@ data
 *.inv
 *.js
 docs/_images/
+
+settings.json
