@@ -129,7 +129,7 @@ cdef void ngramphrase_fast_sentence_sg_neg(NgramPhraseConfig *c, int i, int j) n
 
     cdef long long row1 = word2_index * size, row2
     cdef unsigned long long modulo = 281474976710655ULL
-    cdef REAL_t f, g, label, f_dot
+    cdef REAL_t f, g, label, f_dot, w
     cdef np.uint32_t target_index
     cdef int d
 
@@ -147,9 +147,9 @@ cdef void ngramphrase_fast_sentence_sg_neg(NgramPhraseConfig *c, int i, int j) n
         for d in range(subwords_len):
             our_saxpy(&size, &subwords_weight[d], &syn0_ngrams[subwords_index[d] * size], &ONE, l1, &ONE)
             norm_factor += subwords_weight[d]
-        if norm_factor != <REAL_t>0.0:
+        if norm_factor != (<REAL_t>0.0):
             norm_factor = ONEF / norm_factor
-            sscal(&size, &norm_factor, l1 , &ONE)
+            sscal(&size, &norm_factor, l1, &ONE)
 
     for d in range(negative+1):
         if d == 0:
@@ -172,7 +172,8 @@ cdef void ngramphrase_fast_sentence_sg_neg(NgramPhraseConfig *c, int i, int j) n
         our_saxpy(&size, &g, l1, &ONE, &syn1neg[row2], &ONE)
     our_saxpy(&size, &word_locks_vocab[word2_index], work, &ONE, &syn0_vocab[row1], &ONE)
     for d in range(subwords_len):
-        our_saxpy(&size, &word_locks_ngrams[subwords_index[d]], work, &ONE, &syn0_ngrams[subwords_index[d]*size], &ONE)
+        w = word_locks_ngrams[subwords_index[d]] * subwords_weight[d]
+        our_saxpy(&size, &w, work, &ONE, &syn0_ngrams[subwords_index[d]*size], &ONE)
 
     c.next_random = next_random
 
@@ -295,6 +296,7 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
         int size = c.size
         np.uint32_t *indexes = c.indexes
         np.uint32_t **subwords_idx = c.subwords_idx
+        np.uint32_t **subwords_wgt = c.subwords_wgt
         int *subwords_idx_len = c.subwords_idx_len
         REAL_t alpha = c.alpha
         REAL_t *work = c.work
@@ -305,12 +307,9 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
 
     cdef long long row2
     cdef unsigned long long modulo = 281474976710655ULL
-    cdef REAL_t f, g, count, inv_count = 1.0, label, f_dot
+    cdef REAL_t f, g, count, inv_count = 1.0, label, f_dot, w
     cdef np.uint32_t target_index, word_index
     cdef int d, m
-
-    # FIXME
-    raise NotImplementedError()
 
     word_index = indexes[i]
 
@@ -322,10 +321,10 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
         count += ONEF
         our_saxpy(&size, &ONEF, &syn0_vocab[indexes[m] * size], &ONE, neu1, &ONE)
         for d in range(subwords_idx_len[m]):
-            count += ONEF
-            our_saxpy(&size, &ONEF, &syn0_ngrams[subwords_idx[m][d] * size], &ONE, neu1, &ONE)
+            count += subwords_wgt[m][d]
+            our_saxpy(&size, &subwords_wgt[m][d], &syn0_ngrams[subwords_idx[m][d] * size], &ONE, neu1, &ONE)
 
-    if count > (<REAL_t>0.5):
+    if count != (<REAL_t>0.0):
         inv_count = ONEF / count
     if cbow_mean:
         sscal(&size, &inv_count, neu1, &ONE)
@@ -361,7 +360,8 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
             continue
         our_saxpy(&size, &word_locks_vocab[indexes[m]], work, &ONE, &syn0_vocab[indexes[m]*size], &ONE)
         for d in range(subwords_idx_len[m]):
-            our_saxpy(&size, &word_locks_ngrams[subwords_idx[m][d]], work, &ONE, &syn0_ngrams[subwords_idx[m][d]*size], &ONE)
+            w = word_locks_ngrams[subwords_idx[m][d]] * subwords_wgt[m][d]
+            our_saxpy(&size, &w, work, &ONE, &syn0_ngrams[subwords_idx[m][d]*size], &ONE)
 
     c.next_random = next_random
 
