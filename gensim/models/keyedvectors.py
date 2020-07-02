@@ -2131,9 +2131,11 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
                 #
                 logger.warning('could not extract any ngrams from %r, returning origin vector', word)
                 return word_vec
+            norm_factor = 0.0
             for i, nh in enumerate(ngram_hashes):
                 word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
-            result = word_vec / len(ngram_hashes)
+                norm_factor += ngram_weights[i]
+            result = word_vec / norm_factor
             if use_norm:
                 result /= sqrt(sum(result ** 2))
             return result
@@ -2294,9 +2296,11 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             word_vec = np.copy(self.vectors_vocab[v.index])
             #FIXME
             ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(w, self.split_char, self.bucket)
+            norm_factor = 0.0
             for i, nh in enumerate(ngram_hashes):
                 word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
-            word_vec /= len(ngram_hashes) + 1
+                norm_factor += ngram_weights[i]
+            word_vec /= norm_factor
             self.vectors[v.index] = word_vec
 
     @property
