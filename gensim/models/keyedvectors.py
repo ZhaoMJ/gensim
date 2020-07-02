@@ -184,6 +184,7 @@ from gensim.models.utils_any2vec import (
     _save_word2vec_format,
     _load_word2vec_format,
     ft_ngram_phrase_hashes,
+    compute_phrase_ngrams
 )
 from gensim.similarities.termsim import TermSimilarityIndex, SparseTermSimilarityMatrix
 
@@ -2222,6 +2223,17 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         #
         
         self.vectors_ngrams = rand_obj.uniform(lo, hi, ngrams_shape).astype(REAL)
+
+    def get_ngrams_weights_from_model(self, model):
+        for word, vocab in self.vocab.items():
+            ngram_weights = []
+            ngram_hashes, _ = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
+            word_vec = model[word]
+            for nh in ngram_hashes:
+                ngram_v = matutils.unitvec(self.vectors_ngrams[nh]).astype(REAL)
+                ngram_weights.append(dot(word_vec, ngram_v))
+            self.buckets_weights[vocab.index] = ngram_weights
+            
 
     def update_ngrams_weights(self, seed, old_vocab_len):
         """Update the vocabulary weights for training continuation.
