@@ -296,7 +296,7 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
         int size = c.size
         np.uint32_t *indexes = c.indexes
         np.uint32_t **subwords_idx = c.subwords_idx
-        np.uint32_t **subwords_wgt = c.subwords_wgt
+        REAL_t **subwords_wgt = c.subwords_wgt
         int *subwords_idx_len = c.subwords_idx_len
         REAL_t alpha = c.alpha
         REAL_t *work = c.work
