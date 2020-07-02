@@ -2063,7 +2063,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
 
         """
         # FIXME 
-        return True
+        return word in self.vocab
 
     def save(self, *args, **kwargs):
         """Save object.
