@@ -2006,6 +2006,8 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         self.buckets_weights = None
         self.split_char = split_char
         self.bucket = bucket
+        self.fallback_model = None
+        self.ngrams = None
 
     @classmethod
     def load(cls, fname_or_handle, **kwargs):
@@ -2063,7 +2065,16 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             False
 
         """
-        # FIXME 
+        if self.fallback_model:
+            if word in self.vocab:
+                return True
+            else:
+                hashes, _ = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
+                text_ngrams = compute_phrase_ngrams(word, self.split_char)
+                for i, ng in enumerate(text_ngrams):
+                    if not ng in self.fallback_model and not hashes[i] in self.ngrams:
+                        return False
+                return True
         return word in self.vocab
 
     def save(self, *args, **kwargs):
@@ -2090,6 +2101,9 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         ]
         kwargs['ignore'] = kwargs.get('ignore', ignore_attrs)
         super(NgramPhraseKeyedVectors, self).save(*args, **kwargs)
+
+    def set_fallback_model(self, model):
+        self.fallback_model = model
 
     def word_vec(self, word, use_norm=False):
         """Get `word` representations in vector space, as a 1D numpy array.
@@ -2120,21 +2134,17 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             word_vec = np.zeros(self.vectors_ngrams.shape[1], dtype=REAL)
             # FIXME
             ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
+            text_ngrams = compute_phrase_ngrams(word, self.split_char)
             if len(ngram_hashes) == 0:
-                #FIXME
-                #
-                # If it is impossible to extract _any_ ngrams from the input
-                # word, then the best we can do is return a vector that points
-                # to the origin.  The reference FB implementation does this,
-                # too.
-                #
-                # https://github.com/RaRe-Technologies/gensim/issues/2402
-                #
-                logger.warning('could not extract any ngrams from %r, returning origin vector', word)
                 return word_vec
             norm_factor = 0.0
             for i, nh in enumerate(ngram_hashes):
-                word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
+                if nh in self.ngrams:
+                    word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
+                elif self.fallback_model and text_ngrams[i] in self.fallback_model:
+                    word_vec += self.fallback_model[text_ngrams[i]] * ngram_weights[i]
+                else:
+                    raise KeyError('cannot find all ngrams')
                 norm_factor += ngram_weights[i]
             result = word_vec / norm_factor
             if use_norm:
@@ -2198,7 +2208,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been fully initialized.
 
         """
-        self.buckets_word, self.buckets_weights = _process_ngramphrase_vocab(
+        self.buckets_word, self.buckets_weights, self.ngrams = _process_ngramphrase_vocab(
             self.vocab.items(),
             self.split_char,
             self.bucket
@@ -2250,7 +2260,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been updated.
 
         """
-        self.buckets_word, self.buckets_weights = _process_ngramphrase_vocab(
+        self.buckets_word, self.buckets_weights, self.ngrams = _process_ngramphrase_vocab(
             self.vocab.items(),
             self.split_char,
             self.bucket
@@ -2344,6 +2354,7 @@ def _process_ngramphrase_vocab(iterable, split_char, num_buckets):
     """
     word_indices = {}
     ngram_lens = {}
+    ngrams = set()
 
     if num_buckets == 0:
         # FIXME
@@ -2351,10 +2362,11 @@ def _process_ngramphrase_vocab(iterable, split_char, num_buckets):
 
     for word, vocab in iterable:
         hashes, lengths = ft_ngram_phrase_hashes(word, split_char, num_buckets)
+        ngrams.update(set(hashes))
         word_indices[vocab.index] = np.array(hashes, dtype=np.uint32)
         ngram_lens[vocab.index] = np.array(lengths, dtype=np.float32)
 
-    return word_indices, ngram_lens
+    return word_indices, ngram_lens, ngrams
 
 
 def _pad_random(m, new_rows, rand):
