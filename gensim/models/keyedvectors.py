@@ -2238,9 +2238,9 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         for word, vocab in self.vocab.items():
             ngram_weights = []
             ngram_hashes, _ = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
-            word_vec = model[word]
+            word_vec = matutils.unitvec(model[word])
             for nh in ngram_hashes:
-                ngram_v = matutils.unitvec(self.vectors_ngrams[nh]).astype(REAL)
+                ngram_v = matutils.unitvec(self.vectors_ngrams[nh])
                 ngram_weights.append(dot(word_vec, ngram_v))
             self.buckets_weights[vocab.index] = ngram_weights
             
