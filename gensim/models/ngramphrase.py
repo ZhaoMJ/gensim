@@ -838,7 +838,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         """
         kwargs['ignore'] = kwargs.get(
             'ignore', ['vectors_norm', 'vectors_vocab_norm', 'vectors_ngrams_norm', 'buckets_word', 
-            'pretrained_model', 'buckets_weights', 'fallback_model', 'pretrained_weights'])
+            'pretrained_model', 'buckets_weights', 'fallback_model'])
         super(NgramPhrase, self).save(*args, **kwargs)
 
     @classmethod

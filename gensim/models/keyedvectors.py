@@ -2417,7 +2417,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         self.fallback_model = None
         self.ngrams = None
         self.pretrained_model = None
-        self.pretrained_weights = None
 
     @classmethod
     def load(cls, fname_or_handle, **kwargs):
@@ -2510,14 +2509,16 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             'pretrained_model',
             'buckets_weights',
             'fallback_model',
-            'hash2index',
-            'pretrained_weights'
+            'hash2index'
         ]
         kwargs['ignore'] = kwargs.get('ignore', ignore_attrs)
         super(NgramPhraseKeyedVectors, self).save(*args, **kwargs)
 
     def set_fallback_model(self, model):
         self.fallback_model = model
+
+    def set_pretrained_model(self, model):
+        self.pretrained_model = model
 
     def word_vec(self, word, use_norm=False):
         """Get `word` representations in vector space, as a 1D numpy array.
@@ -2548,6 +2549,19 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             word_vec = np.zeros(self.vectors_ngrams.shape[1], dtype=REAL)
             # FIXME
             ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
+            if self.pretrained_model:
+                weights = []
+                text_ngrams = compute_phrase_ngrams(word, self.split_char)
+                word_vec = matutils.unitvec(self.pretrained_model[word])
+                for ng in text_ngrams:
+                    ngrams_join = self.split_char.join(ng)
+                    if ngrams_join == '':
+                        weights.append(0.0)
+                        continue
+                    ngram_v = matutils.unitvec(self.pretrained_model[ngrams_join])
+                    weights.append(dot(word_vec, ngram_v))
+                ngram_weights = weights
+
             text_ngrams = compute_phrase_ngrams(word, self.split_char)
             if len(ngram_hashes) == 0:
                 return word_vec
@@ -2626,11 +2640,9 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         self.buckets_word, self.buckets_weights, self.ngrams = _process_ngramphrase_vocab(
             self.vocab.items(),
             self.split_char,
-            self.bucket
+            self.bucket,
+            self.pretrained_model
         )
-
-        if self.pretrained_model:
-            self.get_ngrams_weights_from_model(self.pretrained_model)
 
         rand_obj = np.random
         rand_obj.seed(seed)
@@ -2651,28 +2663,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         #
         
         self.vectors_ngrams = rand_obj.uniform(lo, hi, ngrams_shape).astype(REAL)
-
-    def get_ngrams_weights_from_model(self, model):
-        if not self.pretrained_weights:
-            self.pretrained_weights = dict()
-
-        for word, vocab in self.vocab.items():
-            if word in self.pretrained_weights:
-                self.buckets_weights[vocab.index] = self.pretrained_weights[word]
-            else:
-                ngram_weights = []
-                text_ngrams = compute_phrase_ngrams(word, self.split_char)
-                word_vec = matutils.unitvec(model[word])
-                for ng in text_ngrams:
-                    ngrams_join = self.split_char.join(ng)
-                    if ngrams_join == '':
-                        ngram_weights = None
-                        break
-                    ngram_v = matutils.unitvec(model[ngrams_join])
-                    ngram_weights.append(dot(word_vec, ngram_v))
-                if ngram_weights:
-                    self.buckets_weights[vocab.index] = np.array(ngram_weights, dtype=np.float32)
-                    self.pretrained_weights[word] = np.array(ngram_weights, dtype=np.float32)
 
     def update_ngrams_weights(self, seed, old_vocab_len):
         """Update the vocabulary weights for training continuation.
@@ -2759,7 +2749,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
     def num_ngram_vectors(self):
         return self.bucket
 
-def _process_ngramphrase_vocab(iterable, split_char, num_buckets):
+def _process_ngramphrase_vocab(iterable, split_char, num_buckets, pretrained=None):
     """
     Performs a common operation for FastText weight initialization and
     updates: scan the vocabulary, calculate ngrams and their hashes, keep
@@ -2782,20 +2772,33 @@ def _process_ngramphrase_vocab(iterable, split_char, num_buckets):
 
     """
     word_indices = {}
-    ngram_lens = {}
+    ngram_wgts = {}
     ngrams = set()
 
     if num_buckets == 0:
         # FIXME
-        return {v.index: np.array([], dtype=np.uint32) for w, v in iterable}, ngram_lens
+        return {v.index: np.array([], dtype=np.uint32) for w, v in iterable}, ngram_wgts
 
     for word, vocab in iterable:
         hashes, lengths = ft_ngram_phrase_hashes(word, split_char, num_buckets)
         ngrams.update(set(hashes))
         word_indices[vocab.index] = np.array(hashes, dtype=np.uint32)
-        ngram_lens[vocab.index] = np.array(lengths, dtype=np.float32)
+        if pretrained:
+            weights = []
+            text_ngrams = compute_phrase_ngrams(word, split_char)
+            word_vec = matutils.unitvec(pretrained[word])
+            for ng in text_ngrams:
+                ngrams_join = split_char.join(ng)
+                if ngrams_join == '':
+                    weights.append(0.0)
+                    continue
+                ngram_v = matutils.unitvec(pretrained[ngrams_join])
+                weights.append(dot(word_vec, ngram_v))
+            ngram_wgts[vocab.index] = np.array(weights, dtype=np.float32)
+        else:
+            ngram_wgts[vocab.index] = np.array(lengths, dtype=np.float32)
 
-    return word_indices, ngram_lens, ngrams
+    return word_indices, ngram_wgts, ngrams
 
 
 def _pad_random(m, new_rows, rand):
