@@ -68,6 +68,31 @@ cpdef ft_hash_broken(unicode string):
     return h
 
 
+cpdef ft_hash_phrase(phrase):
+    """Calculate hash based on `string`.
+
+    This implementation is broken, see https://github.com/RaRe-Technologies/gensim/issues/2059.
+    It is here only for maintaining backwards compatibility with older models.
+
+    Parameters
+    ----------
+    string : unicode
+        The string whose hash needs to be calculated.
+
+    Returns
+    -------
+    unsigned int
+        The hash of the string.
+
+    """
+    cdef unsigned int h = 2166136261
+    for string in phrase:
+        for c in string:
+            h ^= ord(c)
+            h *= 16777619
+    return h
+
+
 cpdef compute_ngrams(word, unsigned int min_n, unsigned int max_n):
     """Get the list of all possible ngrams for a given word.
 

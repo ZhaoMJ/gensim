@@ -5,16 +5,16 @@
 # cython: embedsignature=True
 # coding: utf-8
 
-"""Optimized Cython functions for training a :class:`~gensim.models.fasttext.FastText` model.
+"""Optimized Cython functions for training a :class:`~gensim.models.ngramphrase.NgramPhrase` model.
 
-The main entry points are :func:`~gensim.models.fasttext_inner.train_batch_sg`
-and :func:`~gensim.models.fasttext_inner.train_batch_cbow`.  They may be
+The main entry points are :func:`~gensim.models.ngramphrase_inner.train_batch_sg`
+and :func:`~gensim.models.ngramphrase_inner.train_batch_cbow`.  They may be
 called directly from Python code.
 
 Notes
 -----
 The implementation of the above functions heavily depends on the
-FastTextConfig struct defined in :file:`gensim/models/fasttext_inner.pxd`.
+NgramPhraseConfig struct defined in :file:`gensim/models/ngramphrase_inner.pxd`.
 
 The FAST_VERSION constant determines what flavor of BLAS we're currently using:
 
@@ -81,12 +81,12 @@ cdef int ONE = 1
 cdef REAL_t ONEF = <REAL_t>1.0
 
 
-cdef void fasttext_fast_sentence_sg_neg(FastTextConfig *c, int i, int j) nogil:
+cdef void ngramphrase_fast_sentence_sg_neg(NgramPhraseConfig *c, int i, int j) nogil:
     """Perform skipgram training with negative sampling.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to a fully initialized and populated struct.
     i : int
         The index of the word at the center of the current window.  This is
@@ -119,6 +119,7 @@ cdef void fasttext_fast_sentence_sg_neg(FastTextConfig *c, int i, int j) nogil:
         np.uint32_t word2_index = c.indexes[i]
         np.uint32_t *subwords_index = c.subwords_idx[i]
         np.uint32_t subwords_len = c.subwords_idx_len[i]
+        REAL_t *subwords_weight = c.subwords_wgt[i]
         REAL_t alpha = c.alpha
         REAL_t *work = c.work
         REAL_t *l1 = c.neu1
@@ -128,7 +129,7 @@ cdef void fasttext_fast_sentence_sg_neg(FastTextConfig *c, int i, int j) nogil:
 
     cdef long long row1 = word2_index * size, row2
     cdef unsigned long long modulo = 281474976710655ULL
-    cdef REAL_t f, g, label, f_dot
+    cdef REAL_t f, g, label, f_dot, w
     cdef np.uint32_t target_index
     cdef int d
 
@@ -142,10 +143,13 @@ cdef void fasttext_fast_sentence_sg_neg(FastTextConfig *c, int i, int j) nogil:
     #
     cdef REAL_t norm_factor
     if subwords_len:
+        norm_factor = <REAL_t>0.0
         for d in range(subwords_len):
-            our_saxpy(&size, &ONEF, &syn0_ngrams[subwords_index[d] * size], &ONE, l1, &ONE)
-        norm_factor = ONEF / subwords_len
-        sscal(&size, &norm_factor, l1 , &ONE)
+            our_saxpy(&size, &subwords_weight[d], &syn0_ngrams[subwords_index[d] * size], &ONE, l1, &ONE)
+            norm_factor += subwords_weight[d]
+        if norm_factor != (<REAL_t>0.0):
+            norm_factor = ONEF / norm_factor
+            sscal(&size, &norm_factor, l1, &ONE)
 
     for d in range(negative+1):
         if d == 0:
@@ -168,17 +172,18 @@ cdef void fasttext_fast_sentence_sg_neg(FastTextConfig *c, int i, int j) nogil:
         our_saxpy(&size, &g, l1, &ONE, &syn1neg[row2], &ONE)
     our_saxpy(&size, &word_locks_vocab[word2_index], work, &ONE, &syn0_vocab[row1], &ONE)
     for d in range(subwords_len):
-        our_saxpy(&size, &word_locks_ngrams[subwords_index[d]], work, &ONE, &syn0_ngrams[subwords_index[d]*size], &ONE)
+        w = word_locks_ngrams[subwords_index[d]] * subwords_weight[d]
+        our_saxpy(&size, &w, work, &ONE, &syn0_ngrams[subwords_index[d]*size], &ONE)
 
     c.next_random = next_random
 
 
-cdef void fasttext_fast_sentence_sg_hs(FastTextConfig *c, int i, int j) nogil:
+cdef void ngramphrase_fast_sentence_sg_hs(NgramPhraseConfig *c, int i, int j) nogil:
     """Perform skipgram training with hierarchical sampling.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to a fully initialized and populated struct.
     i : int
         The index of the word at the center of the current window.  This is
@@ -223,6 +228,9 @@ cdef void fasttext_fast_sentence_sg_hs(FastTextConfig *c, int i, int j) nogil:
     cdef long long row1 = word2_index * size, row2
     cdef REAL_t f, g, f_dot
 
+    # FIXME
+    raise NotImplementedError()
+
     memset(work, 0, size * cython.sizeof(REAL_t))
     memset(l1, 0, size * cython.sizeof(REAL_t))
 
@@ -256,12 +264,12 @@ cdef void fasttext_fast_sentence_sg_hs(FastTextConfig *c, int i, int j) nogil:
         our_saxpy(&size, &word_locks_ngrams[subwords_index[d]], work, &ONE, &syn0_ngrams[row2], &ONE)
 
 
-cdef void fasttext_fast_sentence_cbow_neg(FastTextConfig *c, int i, int j, int k) nogil:
+cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j, int k) nogil:
     """Perform CBOW training with negative sampling.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to a fully initialized and populated struct.
     i : int
         The index of a word inside the current window.
@@ -288,6 +296,7 @@ cdef void fasttext_fast_sentence_cbow_neg(FastTextConfig *c, int i, int j, int k
         int size = c.size
         np.uint32_t *indexes = c.indexes
         np.uint32_t **subwords_idx = c.subwords_idx
+        REAL_t **subwords_wgt = c.subwords_wgt
         int *subwords_idx_len = c.subwords_idx_len
         REAL_t alpha = c.alpha
         REAL_t *work = c.work
@@ -298,7 +307,7 @@ cdef void fasttext_fast_sentence_cbow_neg(FastTextConfig *c, int i, int j, int k
 
     cdef long long row2
     cdef unsigned long long modulo = 281474976710655ULL
-    cdef REAL_t f, g, count, inv_count = 1.0, label, f_dot
+    cdef REAL_t f, g, count, inv_count = 1.0, label, f_dot, w
     cdef np.uint32_t target_index, word_index
     cdef int d, m
 
@@ -312,10 +321,10 @@ cdef void fasttext_fast_sentence_cbow_neg(FastTextConfig *c, int i, int j, int k
         count += ONEF
         our_saxpy(&size, &ONEF, &syn0_vocab[indexes[m] * size], &ONE, neu1, &ONE)
         for d in range(subwords_idx_len[m]):
-            count += ONEF
-            our_saxpy(&size, &ONEF, &syn0_ngrams[subwords_idx[m][d] * size], &ONE, neu1, &ONE)
+            count += subwords_wgt[m][d]
+            our_saxpy(&size, &subwords_wgt[m][d], &syn0_ngrams[subwords_idx[m][d] * size], &ONE, neu1, &ONE)
 
-    if count > (<REAL_t>0.5):
+    if count != (<REAL_t>0.0):
         inv_count = ONEF / count
     if cbow_mean:
         sscal(&size, &inv_count, neu1, &ONE)
@@ -351,17 +360,18 @@ cdef void fasttext_fast_sentence_cbow_neg(FastTextConfig *c, int i, int j, int k
             continue
         our_saxpy(&size, &word_locks_vocab[indexes[m]], work, &ONE, &syn0_vocab[indexes[m]*size], &ONE)
         for d in range(subwords_idx_len[m]):
-            our_saxpy(&size, &word_locks_ngrams[subwords_idx[m][d]], work, &ONE, &syn0_ngrams[subwords_idx[m][d]*size], &ONE)
+            w = word_locks_ngrams[subwords_idx[m][d]] * subwords_wgt[m][d]
+            our_saxpy(&size, &w, work, &ONE, &syn0_ngrams[subwords_idx[m][d]*size], &ONE)
 
     c.next_random = next_random
 
 
-cdef void fasttext_fast_sentence_cbow_hs(FastTextConfig *c, int i, int j, int k) nogil:
+cdef void ngramphrase_fast_sentence_cbow_hs(NgramPhraseConfig *c, int i, int j, int k) nogil:
     """Perform CBOW training with hierarchical sampling.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to a fully initialized and populated struct.
     i : int
         The index of a word inside the current window.
@@ -394,6 +404,9 @@ cdef void fasttext_fast_sentence_cbow_hs(FastTextConfig *c, int i, int j, int k)
     cdef long long row2
     cdef REAL_t f, g, count, inv_count = 1.0, f_dot
     cdef int m
+
+    # FIXME
+    raise NotImplementedError()
 
     memset(neu1, 0, size * cython.sizeof(REAL_t))
     count = <REAL_t>0.0
@@ -433,16 +446,16 @@ cdef void fasttext_fast_sentence_cbow_hs(FastTextConfig *c, int i, int j, int k)
             our_saxpy(&size, &word_locks_ngrams[subwords_idx[m][d]], work, &ONE, &syn0_ngrams[subwords_idx[m][d]*size], &ONE)
 
 
-cdef void init_ft_config(FastTextConfig *c, model, alpha, _work, _neu1):
-    """Load model parameters into a FastTextConfig struct.
+cdef void init_ft_config(NgramPhraseConfig *c, model, alpha, _work, _neu1):
+    """Load model parameters into a NgramPhraseConfig struct.
 
-    The struct itself is defined and documented in fasttext_inner.pxd.
+    The struct itself is defined and documented in ngramphrase_inner.pxd.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to the struct to initialize.
-    model : gensim.models.fasttext.FastText
+    model : gensim.models.ngramphrase.NgramPhrase
         The model to load.
     alpha : float
         The initial learning rate.
@@ -482,7 +495,7 @@ cdef void init_ft_config(FastTextConfig *c, model, alpha, _work, _neu1):
     c.neu1 = <REAL_t *>np.PyArray_DATA(_neu1)
 
 
-cdef object populate_ft_config(FastTextConfig *c, vocab, buckets_word, sentences):
+cdef object populate_ft_config(NgramPhraseConfig *c, vocab, buckets_word, buckets_weights, sentences):
     """Prepare C structures so we can go "full C" and release the Python GIL.
 
     We create indices over the sentences.  We also perform some calculations for
@@ -492,7 +505,7 @@ cdef object populate_ft_config(FastTextConfig *c, vocab, buckets_word, sentences
 
     Parameters
     ----------
-    c : FastTextConfig*
+    c : NgramPhraseConfig*
         A pointer to the struct that will contain the populated indices.
     vocab : dict
         The vocabulary
@@ -534,6 +547,7 @@ cdef object populate_ft_config(FastTextConfig *c, vocab, buckets_word, sentences
 
             c.subwords_idx_len[effective_words] = <int>(len(buckets_word[word.index]))
             c.subwords_idx[effective_words] = <np.uint32_t *>np.PyArray_DATA(buckets_word[word.index])
+            c.subwords_wgt[effective_words] = <REAL_t *>np.PyArray_DATA(buckets_weights[word.index])
 
             if c.hs:
                 c.codelens[effective_words] = <int>len(word.code)
@@ -555,12 +569,12 @@ cdef object populate_ft_config(FastTextConfig *c, vocab, buckets_word, sentences
     return effective_words, effective_sentences
 
 
-cdef void fasttext_train_any(FastTextConfig *c, int num_sentences, int sg) nogil:
+cdef void ngramphrase_train_any(NgramPhraseConfig *c, int num_sentences, int sg) nogil:
     """Performs training on a fully initialized and populated configuration.
 
     Parameters
     ----------
-    c : FastTextConfig *
+    c : NgramPhraseConfig *
         A pointer to the configuration struct.
     num_sentences : int
         The number of sentences to train.
@@ -600,9 +614,9 @@ cdef void fasttext_train_any(FastTextConfig *c, int num_sentences, int sg) nogil
             #
             if sg == 0:
                 if c.hs:
-                    fasttext_fast_sentence_cbow_hs(c, i, window_start, window_end)
+                    ngramphrase_fast_sentence_cbow_hs(c, i, window_start, window_end)
                 if c.negative:
-                    fasttext_fast_sentence_cbow_neg(c, i, window_start, window_end)
+                    ngramphrase_fast_sentence_cbow_neg(c, i, window_start, window_end)
             else:
                 for j in range(window_start, window_end):
                     if j == i:
@@ -612,20 +626,20 @@ cdef void fasttext_train_any(FastTextConfig *c, int num_sentences, int sg) nogil
                         #
                         continue
                     if c.hs:
-                        fasttext_fast_sentence_sg_hs(c, i, j)
+                        ngramphrase_fast_sentence_sg_hs(c, i, j)
                     if c.negative:
-                        fasttext_fast_sentence_sg_neg(c, i, j)
+                        ngramphrase_fast_sentence_sg_neg(c, i, j)
 
 
 def train_batch_sg(model, sentences, alpha, _work, _l1):
     """Update skip-gram model by training on a sequence of sentences.
 
     Each sentence is a list of string tokens, which are looked up in the model's
-    vocab dictionary. Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    vocab dictionary. Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
         Model to be trained.
     sentences : iterable of list of str
         A single batch: part of the corpus streamed directly from disk/network.
@@ -643,20 +657,20 @@ def train_batch_sg(model, sentences, alpha, _work, _l1):
 
     """
     cdef:
-        FastTextConfig c
+        NgramPhraseConfig c
         int num_words = 0
         int num_sentences = 0
 
     init_ft_config(&c, model, alpha, _work, _l1)
 
-    num_words, num_sentences = populate_ft_config(&c, model.wv.vocab, model.wv.buckets_word, sentences)
+    num_words, num_sentences = populate_ft_config(&c, model.wv.vocab, model.wv.buckets_word, model.wv.buckets_weights, sentences)
 
     # precompute "reduced window" offsets in a single randint() call
     for i, randint in enumerate(model.random.randint(0, c.window, num_words)):
         c.reduced_windows[i] = randint
 
     with nogil:
-        fasttext_train_any(&c, num_sentences, 1)
+        ngramphrase_train_any(&c, num_sentences, 1)
 
     return num_words
 
@@ -665,11 +679,11 @@ def train_batch_cbow(model, sentences, alpha, _work, _neu1):
     """Update the CBOW model by training on a sequence of sentences.
 
     Each sentence is a list of string tokens, which are looked up in the model's
-    vocab dictionary. Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    vocab dictionary. Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
         Model to be trained.
     sentences : iterable of list of str
         A single batch: part of the corpus streamed directly from disk/network.
@@ -687,13 +701,13 @@ def train_batch_cbow(model, sentences, alpha, _work, _neu1):
 
     """
     cdef:
-        FastTextConfig c
+        NgramPhraseConfig c
         int num_words = 0
         int num_sentences = 0
 
     init_ft_config(&c, model, alpha, _work, _neu1)
 
-    num_words, num_sentences = populate_ft_config(&c, model.wv.vocab, model.wv.buckets_word, sentences)
+    num_words, num_sentences = populate_ft_config(&c, model.wv.vocab, model.wv.buckets_word, model.wv.buckets_weights, sentences)
 
     # precompute "reduced window" offsets in a single randint() call
     for i, randint in enumerate(model.random.randint(0, c.window, num_words)):
@@ -701,7 +715,7 @@ def train_batch_cbow(model, sentences, alpha, _work, _neu1):
 
     # release GIL & train on all sentences in the batch
     with nogil:
-        fasttext_train_any(&c, num_sentences, 0)
+        ngramphrase_train_any(&c, num_sentences, 0)
 
     return num_words
 

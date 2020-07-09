@@ -9,7 +9,7 @@
 # Copyright (C) 2018 Dmitry Persiyanov <dmitry.persiyanov@gmail.com>
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-"""Optimized cython functions for file-based training :class:`~gensim.models.fasttext.FastText` model."""
+"""Optimized cython functions for file-based training :class:`~gensim.models.ngramphrase.NgramPhrase` model."""
 
 import numpy as np
 cimport numpy as np
@@ -17,13 +17,13 @@ cimport numpy as np
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from gensim.models.fasttext_inner cimport (
-    fasttext_fast_sentence_sg_hs,
-    fasttext_fast_sentence_sg_neg,
-    fasttext_fast_sentence_cbow_hs,
-    fasttext_fast_sentence_cbow_neg,
+from gensim.models.ngramphrase_inner cimport (
+    ngramphrase_fast_sentence_sg_hs,
+    ngramphrase_fast_sentence_sg_neg,
+    ngramphrase_fast_sentence_cbow_hs,
+    ngramphrase_fast_sentence_cbow_neg,
     init_ft_config,
-    FastTextConfig
+    NgramPhraseConfig
 )
 
 from gensim.models.word2vec_inner cimport random_int32
@@ -96,12 +96,12 @@ def train_epoch_sg(
         model, corpus_file, offset, _cython_vocab, _cur_epoch, _expected_examples, _expected_words, _work, _l1):
     """Train Skipgram model for one epoch by training on an input stream. This function is used only in multistream mode.
 
-    Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
-        The FastText model instance to train.
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
+        The NgramPhrase model instance to train.
     corpus_file : str
         Path to corpus file.
     _cur_epoch : int
@@ -117,7 +117,7 @@ def train_epoch_sg(
         Number of words in the vocabulary actually used for training (They already existed in the vocabulary
         and were not discarded by negative sampling).
     """
-    cdef FastTextConfig c
+    cdef NgramPhraseConfig c
 
     # For learning rate updates
     cdef int cur_epoch = _cur_epoch
@@ -169,9 +169,9 @@ def train_epoch_sg(
                         if j == i:
                             continue
                         if c.hs:
-                            fasttext_fast_sentence_sg_hs(&c, i, j)
+                            ngramphrase_fast_sentence_sg_hs(&c, i, j)
                         if c.negative:
-                            fasttext_fast_sentence_sg_neg(&c, i, j)
+                            ngramphrase_fast_sentence_sg_neg(&c, i, j)
 
             total_sentences += sentences.size()
             total_effective_words += effective_words
@@ -186,12 +186,12 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
                      _neu1):
     """Train CBOW model for one epoch by training on an input stream. This function is used only in multistream mode.
 
-    Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
-        The FastText model instance to train.
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
+        The NgramPhrase model instance to train.
     corpus_file : str
         Path to a corpus file.
     _cur_epoch : int
@@ -207,7 +207,7 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
         Number of words in the vocabulary actually used for training (They already existed in the vocabulary
         and were not discarded by negative sampling).
     """
-    cdef FastTextConfig c
+    cdef NgramPhraseConfig c
 
     # For learning rate updates
     cdef int cur_epoch = _cur_epoch
@@ -257,9 +257,9 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
                         k = idx_end
 
                     if c.hs:
-                        fasttext_fast_sentence_cbow_hs(&c, i, j, k)
+                        ngramphrase_fast_sentence_cbow_hs(&c, i, j, k)
                     if c.negative:
-                        fasttext_fast_sentence_cbow_neg(&c, i, j, k)
+                        ngramphrase_fast_sentence_cbow_neg(&c, i, j, k)
 
             total_sentences += sentences.size()
             total_effective_words += effective_words

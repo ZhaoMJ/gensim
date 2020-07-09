@@ -19,7 +19,7 @@ from .phrases import Phrases  # noqa:F401
 from .normmodel import NormModel  # noqa:F401
 from .atmodel import AuthorTopicModel  # noqa:F401
 from .ldaseqmodel import LdaSeqModel  # noqa:F401
-from .fasttext import FastText  # noqa:F401
+from .ngramphrase import NgramPhrase  # noqa:F401
 from .translation_matrix import TranslationMatrix, BackMappingTranslationMatrix  # noqa:F401
 
 from . import wrappers  # noqa:F401
