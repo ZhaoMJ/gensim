@@ -343,7 +343,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
     def __init__(self, sentences=None, corpus_file=None, sg=0, hs=0, size=100, alpha=0.025, window=5, min_count=5,
                  max_vocab_size=None, word_ngrams=1, sample=1e-3, seed=1, workers=3, min_alpha=0.0001,
                  negative=5, ns_exponent=0.75, cbow_mean=1, hashfxn=hash, iter=5, null_word=0, min_n=3, max_n=6,
-                 sorted_vocab=1, split_char=" ", bucket=2000000, trim_rule=None, batch_words=MAX_WORDS_IN_BATCH, callbacks=()):
+                 sorted_vocab=1, split_char=" ", bucket=2000000, trim_rule=None, batch_words=MAX_WORDS_IN_BATCH, callbacks=(), pretrained_model=None):
         """
 
         Parameters
@@ -468,6 +468,9 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         self.trainables = NgramPhraseTrainables(vector_size=size, seed=seed, bucket=bucket, hashfxn=hashfxn)
         self.trainables.prepare_weights(hs, negative, self.wv, update=False, vocabulary=self.vocabulary)
         self.wv.bucket = self.trainables.bucket
+
+        if pretrained_model:
+            self.wv.get_ngrams_weights_from_model(pretrained_model);
 
         super(NgramPhrase, self).__init__(
             sentences=sentences, corpus_file=corpus_file, workers=workers, vector_size=size, epochs=iter,
