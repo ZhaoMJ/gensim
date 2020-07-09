@@ -462,15 +462,13 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             bucket = 0
 
         self.wv = NgramPhraseKeyedVectors(size, split_char, bucket)
+        self.wv.pretrained_model = pretrained_model
         self.vocabulary = NgramPhraseVocab(
             max_vocab_size=max_vocab_size, min_count=min_count, sample=sample,
             sorted_vocab=bool(sorted_vocab), null_word=null_word, ns_exponent=ns_exponent)
         self.trainables = NgramPhraseTrainables(vector_size=size, seed=seed, bucket=bucket, hashfxn=hashfxn)
         self.trainables.prepare_weights(hs, negative, self.wv, update=False, vocabulary=self.vocabulary)
         self.wv.bucket = self.trainables.bucket
-
-        if pretrained_model:
-            self.wv.get_ngrams_weights_from_model(pretrained_model);
 
         super(NgramPhrase, self).__init__(
             sentences=sentences, corpus_file=corpus_file, workers=workers, vector_size=size, epochs=iter,
@@ -614,6 +612,9 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         self.wv.vectors_vocab_norm = None
         self.wv.vectors_ngrams_norm = None
         self.wv.buckets_word = None
+        self.wv.buckets_weights = None
+        self.wv.pretrained_model = None
+        self.wv.fallback_model = None
 
     def _do_train_epoch(self, corpus_file, thread_id, offset, cython_vocab, thread_private_mem, cur_epoch,
                         total_examples=None, total_words=None, **kwargs):
@@ -836,7 +837,8 @@ class NgramPhrase(BaseWordEmbeddingsModel):
 
         """
         kwargs['ignore'] = kwargs.get(
-            'ignore', ['vectors_norm', 'vectors_vocab_norm', 'vectors_ngrams_norm', 'buckets_word'])
+            'ignore', ['vectors_norm', 'vectors_vocab_norm', 'vectors_ngrams_norm', 'buckets_word', 
+            'pretrained_model', 'buckets_weights', 'fallback_model', 'pretrained_weights'])
         super(NgramPhrase, self).save(*args, **kwargs)
 
     @classmethod
