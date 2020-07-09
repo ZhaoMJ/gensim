@@ -287,8 +287,6 @@ from numpy import ones, vstack, float32 as REAL
 import six
 from collections.abc import Iterable
 
-import gensim.models._ngramphrase_bin
-
 from gensim.models.word2vec import Word2VecVocab, Word2VecTrainables, train_sg_pair, train_cbow_pair  # noqa
 from gensim.models.keyedvectors import NgramPhraseKeyedVectors
 from gensim.models.base_any2vec import BaseWordEmbeddingsModel
