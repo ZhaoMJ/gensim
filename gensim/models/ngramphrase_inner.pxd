@@ -5,8 +5,8 @@
 # cython: embedsignature=True
 # coding: utf-8
 #
-# shared type definitions for fasttext_inner
-# used from fasttext_corpusfile
+# shared type definitions for ngramphrase_inner
+# used from ngramphrase_corpusfile
 #
 
 
@@ -24,11 +24,11 @@ cdef struct NgramPhraseConfig:
     # Contains model parameters and indices required for training.
     #
     # This struct performs two main roles.  First, it offers a lower-level
-    # abstraction over the gensim.models.fasttext.FastText model class, keeping
+    # abstraction over the gensim.models.ngramphrase.NgramPhrase model class, keeping
     # some of its attributes as C types.
     #
     # The second role is to index batches of the corpus in a way that is
-    # productive for FastText training.  More specifically, this index is flat:
+    # productive for NgramPhrase training.  More specifically, this index is flat:
     # it arranges all tokens in a conceptually one-dimensional array, bypassing
     # OOV terms and empty sentences.
     #
@@ -40,7 +40,7 @@ cdef struct NgramPhraseConfig:
     #
     #   1) init_ft_config: initialize the struct, allocate working memory
     #   2) populate_ft_config: populate the indices
-    #   3) fasttext_train_any: perform actual training
+    #   3) ngramphrase_train_any: perform actual training
     #
 
     #
@@ -123,7 +123,7 @@ cdef struct NgramPhraseConfig:
 
 
 #
-# See fasttext_inner.pyx for documentation on the functions below.
+# See ngramphrase_inner.pyx for documentation on the functions below.
 #
 cdef void init_ft_config(NgramPhraseConfig *c, model, alpha, _work, _neu1)
 
@@ -143,4 +143,4 @@ cdef void ngramphrase_fast_sentence_cbow_neg(NgramPhraseConfig *c, int i, int j,
 cdef void ngramphrase_fast_sentence_cbow_hs(NgramPhraseConfig *c, int i, int j, int k) nogil
 
 
-cdef void fasttext_train_any(NgramPhraseConfig *c, int num_sentences, int sg) nogil
+cdef void ngramphrase_train_any(NgramPhraseConfig *c, int num_sentences, int sg) nogil

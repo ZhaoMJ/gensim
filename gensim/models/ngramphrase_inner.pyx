@@ -5,16 +5,16 @@
 # cython: embedsignature=True
 # coding: utf-8
 
-"""Optimized Cython functions for training a :class:`~gensim.models.fasttext.FastText` model.
+"""Optimized Cython functions for training a :class:`~gensim.models.ngramphrase.NgramPhrase` model.
 
-The main entry points are :func:`~gensim.models.fasttext_inner.train_batch_sg`
-and :func:`~gensim.models.fasttext_inner.train_batch_cbow`.  They may be
+The main entry points are :func:`~gensim.models.ngramphrase_inner.train_batch_sg`
+and :func:`~gensim.models.ngramphrase_inner.train_batch_cbow`.  They may be
 called directly from Python code.
 
 Notes
 -----
 The implementation of the above functions heavily depends on the
-NgramPhraseConfig struct defined in :file:`gensim/models/fasttext_inner.pxd`.
+NgramPhraseConfig struct defined in :file:`gensim/models/ngramphrase_inner.pxd`.
 
 The FAST_VERSION constant determines what flavor of BLAS we're currently using:
 
@@ -449,13 +449,13 @@ cdef void ngramphrase_fast_sentence_cbow_hs(NgramPhraseConfig *c, int i, int j, 
 cdef void init_ft_config(NgramPhraseConfig *c, model, alpha, _work, _neu1):
     """Load model parameters into a NgramPhraseConfig struct.
 
-    The struct itself is defined and documented in fasttext_inner.pxd.
+    The struct itself is defined and documented in ngramphrase_inner.pxd.
 
     Parameters
     ----------
     c : NgramPhraseConfig *
         A pointer to the struct to initialize.
-    model : gensim.models.fasttext.FastText
+    model : gensim.models.ngramphrase.NgramPhrase
         The model to load.
     alpha : float
         The initial learning rate.
@@ -569,7 +569,7 @@ cdef object populate_ft_config(NgramPhraseConfig *c, vocab, buckets_word, bucket
     return effective_words, effective_sentences
 
 
-cdef void fasttext_train_any(NgramPhraseConfig *c, int num_sentences, int sg) nogil:
+cdef void ngramphrase_train_any(NgramPhraseConfig *c, int num_sentences, int sg) nogil:
     """Performs training on a fully initialized and populated configuration.
 
     Parameters
@@ -635,11 +635,11 @@ def train_batch_sg(model, sentences, alpha, _work, _l1):
     """Update skip-gram model by training on a sequence of sentences.
 
     Each sentence is a list of string tokens, which are looked up in the model's
-    vocab dictionary. Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    vocab dictionary. Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
         Model to be trained.
     sentences : iterable of list of str
         A single batch: part of the corpus streamed directly from disk/network.
@@ -670,7 +670,7 @@ def train_batch_sg(model, sentences, alpha, _work, _l1):
         c.reduced_windows[i] = randint
 
     with nogil:
-        fasttext_train_any(&c, num_sentences, 1)
+        ngramphrase_train_any(&c, num_sentences, 1)
 
     return num_words
 
@@ -679,11 +679,11 @@ def train_batch_cbow(model, sentences, alpha, _work, _neu1):
     """Update the CBOW model by training on a sequence of sentences.
 
     Each sentence is a list of string tokens, which are looked up in the model's
-    vocab dictionary. Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    vocab dictionary. Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
         Model to be trained.
     sentences : iterable of list of str
         A single batch: part of the corpus streamed directly from disk/network.
@@ -715,7 +715,7 @@ def train_batch_cbow(model, sentences, alpha, _work, _neu1):
 
     # release GIL & train on all sentences in the batch
     with nogil:
-        fasttext_train_any(&c, num_sentences, 0)
+        ngramphrase_train_any(&c, num_sentences, 0)
 
     return num_words
 

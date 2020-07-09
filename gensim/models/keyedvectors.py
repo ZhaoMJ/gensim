@@ -1951,7 +1951,7 @@ class Doc2VecKeyedVectors(BaseKeyedVectors):
             return max_rawint + 1 + doctags[index].offset
 
 class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
-    """Vectors and vocab for :class:`~gensim.models.fasttext.FastText`.
+    """Vectors and vocab for :class:`~gensim.models.ngramphrase.NgramPhrase`.
 
     Implements significant parts of the FastText algorithm.  For example,
     the :func:`word_vec` calculates vectors for out-of-vocabulary (OOV)

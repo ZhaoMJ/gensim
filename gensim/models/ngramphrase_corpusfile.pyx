@@ -9,7 +9,7 @@
 # Copyright (C) 2018 Dmitry Persiyanov <dmitry.persiyanov@gmail.com>
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-"""Optimized cython functions for file-based training :class:`~gensim.models.fasttext.FastText` model."""
+"""Optimized cython functions for file-based training :class:`~gensim.models.ngramphrase.NgramPhrase` model."""
 
 import numpy as np
 cimport numpy as np
@@ -17,7 +17,7 @@ cimport numpy as np
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-from gensim.models.fasttext_inner cimport (
+from gensim.models.ngramphrase_inner cimport (
     ngramphrase_fast_sentence_sg_hs,
     ngramphrase_fast_sentence_sg_neg,
     ngramphrase_fast_sentence_cbow_hs,
@@ -96,12 +96,12 @@ def train_epoch_sg(
         model, corpus_file, offset, _cython_vocab, _cur_epoch, _expected_examples, _expected_words, _work, _l1):
     """Train Skipgram model for one epoch by training on an input stream. This function is used only in multistream mode.
 
-    Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
-        The FastText model instance to train.
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
+        The NgramPhrase model instance to train.
     corpus_file : str
         Path to corpus file.
     _cur_epoch : int
@@ -186,12 +186,12 @@ def train_epoch_cbow(model, corpus_file, offset, _cython_vocab, _cur_epoch, _exp
                      _neu1):
     """Train CBOW model for one epoch by training on an input stream. This function is used only in multistream mode.
 
-    Called internally from :meth:`~gensim.models.fasttext.FastText.train`.
+    Called internally from :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
 
     Parameters
     ----------
-    model : :class:`~gensim.models.fasttext.FastText`
-        The FastText model instance to train.
+    model : :class:`~gensim.models.ngramphrase.NgramPhrase`
+        The NgramPhrase model instance to train.
     corpus_file : str
         Path to a corpus file.
     _cur_epoch : int

@@ -5,22 +5,22 @@
 # Copyright (C) 2018 RaRe Technologies s.r.o.
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-"""Learn word representations via Fasttext: `Enriching Word Vectors with Subword Information
+"""Learn word representations via NgramPhrase: `Enriching Word Vectors with Subword Information
 <https://arxiv.org/abs/1607.04606>`_.
 
 This module allows training word embeddings from a training corpus with the additional ability to obtain word vectors
 for out-of-vocabulary words.
 
-This module contains a fast native C implementation of Fasttext with Python interfaces. It is **not** only a wrapper
+This module contains a fast native C implementation of NgramPhrase with Python interfaces. It is **not** only a wrapper
 around Facebook's implementation.
 
-This module supports loading models trained with Facebook's fastText implementation.
+This module supports loading models trained with Facebook's NgramPhrase implementation.
 It also supports continuing training from such models.
 
 For a tutorial see `this notebook
 <https://github.com/RaRe-Technologies/gensim/blob/develop/docs/notebooks/NgramPhrase_Tutorial.ipynb>`_.
 
-**Make sure you have a C compiler before installing Gensim, to use the optimized (compiled) Fasttext
+**Make sure you have a C compiler before installing Gensim, to use the optimized (compiled) NgramPhrase
 training routines.**
 
 Usage examples
@@ -93,7 +93,7 @@ Passing a corpus is simple:
 The model needs the `total_words` parameter in order to
 manage the training rate (alpha) correctly, and to give accurate progress estimates.
 The above example relies on an implementation detail: the
-:meth:`~gensim.models.fasttext.NgramPhrase.build_vocab` method
+:meth:`~gensim.models.ngramphrase.NgramPhrase.build_vocab` method
 sets the `corpus_total_words` (and also `corpus_count`) model attributes.
 You may calculate them by scanning over the corpus yourself, too.
 
@@ -127,7 +127,7 @@ Persist a model to disk with:
 
     >>> from gensim.test.utils import get_tmpfile
     >>>
-    >>> fname = get_tmpfile("fasttext.model")
+    >>> fname = get_tmpfile("ngramphrase.model")
     >>>
     >>> model.save(fname)
     >>> model = NgramPhrase.load(fname)
@@ -161,12 +161,12 @@ For example, you can continue training the loaded model:
     False
 
 .. Important::
-    Be sure to call the :meth:`~gensim.models.fasttext.NgramPhrase.build_vocab`
-    method with `update=True` before the :meth:`~gensim.models.fasttext.NgramPhrase.train` method
+    Be sure to call the :meth:`~gensim.models.ngramphrase.NgramPhrase.build_vocab`
+    method with `update=True` before the :meth:`~gensim.models.ngramphrase.NgramPhrase.train` method
     when continuing training.  Without this call, previously unseen terms
     will not be added to the vocabulary.
 
-You can also load models trained with Facebook's fastText implementation:
+You can also load models trained with Facebook's NgramPhrase implementation:
 
 .. sourcecode:: pycon
 
@@ -190,7 +190,7 @@ You may continue training them on new data:
     True
 
 If you do not intend to continue training the model, consider using the
-:func:`gensim.models.fasttext.load_facebook_vectors` function instead.
+:func:`gensim.models.ngramphrase.load_facebook_vectors` function instead.
 That function only loads the word embeddings (keyed vectors), consuming much less CPU and RAM:
 
 .. sourcecode:: pycon
@@ -253,10 +253,10 @@ And on word analogies:
 Implementation Notes
 --------------------
 
-These notes may help developers navigate our fastText implementation.
+These notes may help developers navigate our NgramPhrase implementation.
 The implementation is split across several submodules:
 
-- :mod:`gensim.models.fasttext`: This module. Contains NgramPhrase-specific functionality only.
+- :mod:`gensim.models.ngramphrase`: This module. Contains NgramPhrase-specific functionality only.
 - :mod:`gensim.models.keyedvectors`: Implements both generic and NgramPhrase-specific functionality.
 - :mod:`gensim.models.word2vec`: Contains implementations for the vocabulary
   and the trainables for NgramPhrase.
@@ -273,9 +273,9 @@ It consists of several important classes:
   This is sometimes called the Dictionary within Gensim.
 - :class:`~gensim.models.keyedvectors.NgramPhraseKeyedVectors`: the vectors.
   Once training is complete, this class is sufficient for calculating embeddings.
-- :class:`~gensim.models.fasttext.NgramPhraseTrainables`: the underlying neural network.
+- :class:`~gensim.models.ngramphrase.NgramPhraseTrainables`: the underlying neural network.
   The implementation uses this class to *learn* the word embeddings.
-- :class:`~gensim.models.fasttext.NgramPhrase`: ties everything together.
+- :class:`~gensim.models.ngramphrase.NgramPhrase`: ties everything together.
 
 """
 
@@ -287,7 +287,7 @@ from numpy import ones, vstack, float32 as REAL
 import six
 from collections.abc import Iterable
 
-import gensim.models._fasttext_bin
+import gensim.models._ngramphrase_bin
 
 from gensim.models.word2vec import Word2VecVocab, Word2VecTrainables, train_sg_pair, train_cbow_pair  # noqa
 from gensim.models.keyedvectors import NgramPhraseKeyedVectors
@@ -300,13 +300,13 @@ from gensim.utils import deprecated, call_on_class_only
 logger = logging.getLogger(__name__)
 
 try:
-    from gensim.models.fasttext_inner import (  # noqa: F401
+    from gensim.models.ngramphrase_inner import (  # noqa: F401
         train_batch_sg,
         train_batch_cbow,
         FAST_VERSION,
         MAX_WORDS_IN_BATCH,
     )
-    from gensim.models.fasttext_corpusfile import train_epoch_sg, train_epoch_cbow
+    from gensim.models.ngramphrase_corpusfile import train_epoch_sg, train_epoch_cbow
 except ImportError:
     raise utils.NO_CYTHON
 
@@ -315,9 +315,9 @@ class NgramPhrase(BaseWordEmbeddingsModel):
     """Train, use and evaluate word representations learned using the method
     described in `Enriching Word Vectors with Subword Information <https://arxiv.org/abs/1607.04606>`_, aka NgramPhrase.
 
-    The model can be stored/loaded via its :meth:`~gensim.models.fasttext.NgramPhrase.save` and
-    :meth:`~gensim.models.fasttext.NgramPhrase.load` methods, or loaded from a format compatible with the original
-    Fasttext implementation via :func:`~gensim.models.fasttext.load_facebook_model`.
+    The model can be stored/loaded via its :meth:`~gensim.models.ngramphrase.NgramPhrase.save` and
+    :meth:`~gensim.models.ngramphrase.NgramPhrase.load` methods, or loaded from a format compatible with the original
+    NgramPhrase implementation via :func:`~gensim.models.ngramphrase.load_facebook_model`.
 
     Attributes
     ----------
@@ -327,11 +327,11 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         This allows the model to compute embeddings even for **unseen** words (that do not exist in the vocabulary),
         as the aggregate of the n-grams included in the word. After training the model, this attribute can be used
         directly to query those embeddings in various ways. Check the module level docstring for some examples.
-    vocabulary : :class:`~gensim.models.fasttext.NgramPhraseVocab`
+    vocabulary : :class:`~gensim.models.ngramphrase.NgramPhraseVocab`
         This object represents the vocabulary of the model.
         Besides keeping track of all unique words, this object provides extra functionality, such as
         constructing a huffman tree (frequent words are closer to the root), or discarding extremely rare words.
-    trainables : :class:`~gensim.models.fasttext.NgramPhraseTrainables`
+    trainables : :class:`~gensim.models.ngramphrase.NgramPhraseTrainables`
         This object represents the inner shallow neural network used to train the embeddings. This is very
         similar to the network of the :class:`~gensim.models.word2vec.Word2Vec` model, but it also trains weights
         for the N-Grams (sequences of more than 1 words). The semantics of the network are almost the same as
@@ -414,7 +414,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             or a callable that accepts parameters (word, count, min_count) and returns either
             :attr:`gensim.utils.RULE_DISCARD`, :attr:`gensim.utils.RULE_KEEP` or :attr:`gensim.utils.RULE_DEFAULT`.
             The rule, if given, is only used to prune vocabulary during
-            :meth:`~gensim.models.fasttext.NgramPhrase.build_vocab` and is not stored as part of themodel.
+            :meth:`~gensim.models.ngramphrase.NgramPhrase.build_vocab` and is not stored as part of themodel.
 
             The input parameters are of the following types:
                 * `word` (str) - the word we are examining
@@ -456,7 +456,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
 
         """
         self.load = call_on_class_only
-        self.load_fasttext_format = call_on_class_only
+        self.load_ngramphrase_format = call_on_class_only
         self.callbacks = callbacks
         self.split_char = split_char
         self.word_ngrams = int(word_ngrams)
@@ -545,7 +545,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             or a callable that accepts parameters (word, count, min_count) and returns either
             :attr:`gensim.utils.RULE_DISCARD`, :attr:`gensim.utils.RULE_KEEP` or :attr:`gensim.utils.RULE_DEFAULT`.
             The rule, if given, is only used to prune vocabulary during
-            :meth:`~gensim.models.fasttext.NgramPhrase.build_vocab` and is not stored as part of the model.
+            :meth:`~gensim.models.ngramphrase.NgramPhrase.build_vocab` and is not stored as part of the model.
 
             The input parameters are of the following types:
                 * `word` (str) - the word we are examining
@@ -580,7 +580,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             raise RuntimeError(
                 "You cannot do an online vocabulary-update of a model which has no prior vocabulary. "
                 "First build the vocabulary of your model with a corpus "
-                "by calling the gensim.models.fasttext.NgramPhrase.build_vocab method "
+                "by calling the gensim.models.ngramphrase.NgramPhrase.build_vocab method "
                 "before doing an online update."
             )
         else:
@@ -668,12 +668,12 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         To support linear learning-rate decay from (initial) `alpha` to `min_alpha`, and accurate
         progress-percentage logging, either `total_examples` (count of sentences) or `total_words` (count of
         raw words in sentences) **MUST** be provided. If `sentences` is the same corpus
-        that was provided to :meth:`~gensim.models.fasttext.NgramPhrase.build_vocab` earlier,
+        that was provided to :meth:`~gensim.models.ngramphrase.NgramPhrase.build_vocab` earlier,
         you can simply use `total_examples=self.corpus_count`.
 
         To avoid common mistakes around the model's ability to do multiple training passes itself, an
         explicit `epochs` argument **MUST** be provided. In the common and recommended case
-        where :meth:`~gensim.models.fasttext.NgramPhrase.train` is only called once, you can set `epochs=self.iter`.
+        where :meth:`~gensim.models.ngramphrase.NgramPhrase.train` is only called once, you can set `epochs=self.iter`.
 
         Parameters
         ----------
@@ -694,14 +694,14 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             Number of iterations (epochs) over the corpus.
         start_alpha : float, optional
             Initial learning rate. If supplied, replaces the starting `alpha` from the constructor,
-            for this one call to :meth:`~gensim.models.fasttext.NgramPhrase.train`.
-            Use only if making multiple calls to :meth:`~gensim.models.fasttext.NgramPhrase.train`, when you want to manage
+            for this one call to :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
+            Use only if making multiple calls to :meth:`~gensim.models.ngramphrase.NgramPhrase.train`, when you want to manage
             the alpha learning-rate yourself (not recommended).
         end_alpha : float, optional
             Final learning rate. Drops linearly from `start_alpha`.
             If supplied, this replaces the final `min_alpha` from the constructor, for this one call to
-            :meth:`~gensim.models.fasttext.NgramPhrase.train`.
-            Use only if making multiple calls to :meth:`~gensim.models.fasttext.NgramPhrase.train`, when you want to manage
+            :meth:`~gensim.models.ngramphrase.NgramPhrase.train`.
+            Use only if making multiple calls to :meth:`~gensim.models.ngramphrase.NgramPhrase.train`, when you want to manage
             the alpha learning-rate yourself (not recommended).
         word_count : int
             Count of words already trained. Set this to 0 for the usual
@@ -764,7 +764,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
     def clear_sims(self):
         """Remove all L2-normalized word vectors from the model, to free up memory.
 
-        You can recompute them later again using the :meth:`~gensim.models.fasttext.NgramPhrase.init_sims` method.
+        You can recompute them later again using the :meth:`~gensim.models.ngramphrase.NgramPhrase.init_sims` method.
 
         """
         self._clear_post_train()
@@ -792,11 +792,11 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         'use load_facebook_vectors (to use pretrained embeddings) or load_facebook_model '
         '(to continue training with the loaded full model, more RAM) instead'
     )
-    def load_fasttext_format(cls, model_file, encoding='utf8'):
+    def load_ngramphrase_format(cls, model_file, encoding='utf8'):
         """Deprecated.
 
-        Use :func:`gensim.models.fasttext.load_facebook_model` or
-        :func:`gensim.models.fasttext.load_facebook_vectors` instead.
+        Use :func:`gensim.models.ngramphrase.load_facebook_model` or
+        :func:`gensim.models.ngramphrase.load_facebook_vectors` instead.
 
         """
         return load_facebook_model(model_file, encoding=encoding)
@@ -814,13 +814,13 @@ class NgramPhrase(BaseWordEmbeddingsModel):
             Specifies the encoding.
 
         """
-        m = _load_fasttext_format(self.file_name, encoding=encoding)
+        m = _load_ngramphrase_format(self.file_name, encoding=encoding)
         for attr, val in six.iteritems(m.__dict__):
             setattr(self, attr, val)
 
     def save(self, *args, **kwargs):
-        """Save the Fasttext model. This saved model can be loaded again using
-        :meth:`~gensim.models.fasttext.NgramPhrase.load`, which supports incremental training
+        """Save the NgramPhrase model. This saved model can be loaded again using
+        :meth:`~gensim.models.ngramphrase.NgramPhrase.load`, which supports incremental training
         and getting vectors for out-of-vocabulary words.
 
         Parameters
@@ -830,8 +830,8 @@ class NgramPhrase(BaseWordEmbeddingsModel):
 
         See Also
         --------
-        :meth:`~gensim.models.fasttext.NgramPhrase.load`
-            Load :class:`~gensim.models.fasttext.NgramPhrase` model.
+        :meth:`~gensim.models.ngramphrase.NgramPhrase.load`
+            Load :class:`~gensim.models.ngramphrase.NgramPhrase` model.
 
         """
         kwargs['ignore'] = kwargs.get(
@@ -849,13 +849,13 @@ class NgramPhrase(BaseWordEmbeddingsModel):
 
         Returns
         -------
-        :class:`~gensim.models.fasttext.NgramPhrase`
+        :class:`~gensim.models.ngramphrase.NgramPhrase`
             Loaded model.
 
         See Also
         --------
-        :meth:`~gensim.models.fasttext.NgramPhrase.save`
-            Save :class:`~gensim.models.fasttext.NgramPhrase` model.
+        :meth:`~gensim.models.ngramphrase.NgramPhrase.save`
+            Save :class:`~gensim.models.ngramphrase.NgramPhrase` model.
 
         """
         try:
@@ -870,8 +870,8 @@ class NgramPhrase(BaseWordEmbeddingsModel):
                 model.wv.bucket = model.trainables.bucket
         except AttributeError:
             logger.info('Model saved using code from earlier Gensim Version. Re-loading old model in a compatible way.')
-            from gensim.models.deprecated.fasttext import load_old_fasttext
-            model = load_old_fasttext(*args, **kwargs)
+            from gensim.models.deprecated.ngramphrase import load_old_ngramphrase
+            model = load_old_ngramphrase(*args, **kwargs)
 
         gensim.models.keyedvectors._try_upgrade(model.wv)
 
@@ -890,7 +890,7 @@ class NgramPhraseVocab(Word2VecVocab):
 
 
 class NgramPhraseTrainables(Word2VecTrainables):
-    """Represents the inner shallow neural network used to train :class:`~gensim.models.fasttext.NgramPhrase`.
+    """Represents the inner shallow neural network used to train :class:`~gensim.models.ngramphrase.NgramPhrase`.
 
     Mostly inherits from its parent (:class:`~gensim.models.word2vec.Word2VecTrainables`).
     Adds logic for calculating and maintaining ngram weights.
@@ -939,7 +939,7 @@ class NgramPhraseTrainables(Word2VecTrainables):
         # Lockf stands for "lock factor": zero values suppress learning, one
         # values enable it. Interestingly, the vectors_vocab_lockf and
         # vectors_ngrams_lockf seem to be used only by the C code in
-        # fasttext_inner.pyx.
+        # ngramphrase_inner.pyx.
         #
         # The word2vec implementation also uses vectors_lockf: in that case,
         # it's a 1D array, with a real number for each vector. The NgramPhrase
@@ -963,7 +963,7 @@ class NgramPhraseTrainables(Word2VecTrainables):
         update : bool
             If True, the new vocab words and their new ngrams word vectors are initialized
             with random uniform distribution and updated/added to the existing vocab word and ngram vectors.
-        vocabulary : :class:`~gensim.models.fasttext.NgramPhraseVocab`
+        vocabulary : :class:`~gensim.models.ngramphrase.NgramPhraseVocab`
             This object represents the vocabulary of the model.
             If update is True, then vocabulary may not be None.
 
