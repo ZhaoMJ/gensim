@@ -56,6 +56,8 @@ cdef class CythonVocab:
                 word.subword_idx_len = <int>(len(wv.buckets_word[word.index]))
                 word.subword_idx = <np.uint32_t *>np.PyArray_DATA(wv.buckets_word[word.index])
 
+            # FIXME: ngramphrase
+
             self.vocab[token] = word
 
     cdef cvocab_t* get_vocab_ptr(self) nogil except *:

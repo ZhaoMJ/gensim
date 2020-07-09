@@ -24,6 +24,7 @@ from setuptools.command.build_ext import build_ext
 c_extensions = {
     'gensim.models.word2vec_inner': 'gensim/models/word2vec_inner.c',
     'gensim.corpora._mmreader': 'gensim/corpora/_mmreader.c',
+    'gensim.models.fasttext_inner': 'gensim/models/fasttext_inner.c',
     'gensim.models.ngramphrase_inner': 'gensim/models/ngramphrase_inner.c',
     'gensim.models._utils_any2vec': 'gensim/models/_utils_any2vec.c',
     'gensim._matutils': 'gensim/_matutils.c',
@@ -33,6 +34,7 @@ c_extensions = {
 cpp_extensions = {
     'gensim.models.doc2vec_inner': 'gensim/models/doc2vec_inner.cpp',
     'gensim.models.word2vec_corpusfile': 'gensim/models/word2vec_corpusfile.cpp',
+    'gensim.models.fasttext_corpusfile': 'gensim/models/fasttext_corpusfile.cpp',
     'gensim.models.ngramphrase_corpusfile': 'gensim/models/ngramphrase_corpusfile.cpp',
     'gensim.models.doc2vec_corpusfile': 'gensim/models/doc2vec_corpusfile.cpp',
 }
