@@ -2547,10 +2547,11 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
                 return word_vec
             norm_factor = 0.0
             for i, nh in enumerate(ngram_hashes):
+                text_ngrams_join = self.split_char.join(text_ngrams[i])
                 if nh in self.ngrams:
                     word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
-                elif self.fallback_model and text_ngrams[i] in self.fallback_model:
-                    word_vec += self.fallback_model[text_ngrams[i]] * ngram_weights[i]
+                elif self.fallback_model and text_ngrams_join in self.fallback_model:
+                    word_vec += self.fallback_model[text_ngrams_join] * ngram_weights[i]
                 else:
                     raise KeyError('cannot find all ngrams')
                 norm_factor += ngram_weights[i]
