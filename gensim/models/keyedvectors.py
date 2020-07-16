@@ -2414,7 +2414,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         self.buckets_weights = None
         self.split_char = split_char
         self.bucket = bucket
-        self.fallback_model = None
         self.ngrams = None
         self.pretrained_model = None
 
@@ -2474,16 +2473,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             False
 
         """
-        if self.fallback_model:
-            if word in self.vocab:
-                return True
-            else:
-                hashes, _ = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
-                text_ngrams = compute_phrase_ngrams(word, self.split_char)
-                for i, ng in enumerate(text_ngrams):
-                    if not ng in self.fallback_model and not hashes[i] in self.ngrams:
-                        return False
-                return True
         return word in self.vocab
 
     def save(self, *args, **kwargs):
@@ -2513,9 +2502,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         ]
         kwargs['ignore'] = kwargs.get('ignore', ignore_attrs)
         super(NgramPhraseKeyedVectors, self).save(*args, **kwargs)
-
-    def set_fallback_model(self, model):
-        self.fallback_model = model
 
     def set_pretrained_model(self, model):
         self.pretrained_model = model
@@ -2570,10 +2556,11 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
                 text_ngrams_join = self.split_char.join(text_ngrams[i])
                 if nh in self.ngrams:
                     word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
-                elif self.fallback_model and text_ngrams_join in self.fallback_model:
-                    word_vec += self.fallback_model[text_ngrams_join] * ngram_weights[i]
                 else:
-                    raise KeyError('cannot find all ngrams')
+                    logger.info("cannot find all ngrams")
+                # FIXME
+                # else:
+                #     raise KeyError('cannot find all ngrams')
                 norm_factor += ngram_weights[i]
             result = word_vec / norm_factor
             if use_norm:
