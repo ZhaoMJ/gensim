@@ -102,6 +102,38 @@ def ft_ngram_hashes(word, minn, maxn, num_buckets, fb_compatible=True):
         hashes = [ft_hash_broken(n) % num_buckets for n in text_ngrams]
     return hashes
 
+def ft_ngram_hashes_weighed(word, minn, maxn, num_buckets, fb_compatible=True):
+    """Calculate the ngrams of the word and hash them.
+
+    Parameters
+    ----------
+    word : str
+        The word to calculate ngram hashes for.
+    minn : int
+        Minimum ngram length
+    maxn : int
+        Maximum ngram length
+    num_buckets : int
+        The number of buckets
+    fb_compatible : boolean, optional
+        True for compatibility with the Facebook implementation.
+        False for compatibility with the old Gensim implementation.
+
+    Returns
+    -------
+        A list of hashes (integers), one per each detected ngram.
+
+    """
+    if fb_compatible:
+        encoded_ngrams = compute_ngrams_bytes(word, minn, maxn)
+        hashes = [ft_hash_bytes(n) % num_buckets for n in encoded_ngrams]
+        lengths = [len(n) for n in encoded_ngrams]
+    else:
+        text_ngrams = compute_ngrams(word, minn, maxn)
+        hashes = [ft_hash_broken(n) % num_buckets for n in text_ngrams]
+        lengths = [len(n) for n in text_ngrams]
+    return hashes, lengths
+
 def compute_phrase_ngrams(phrase, split_char):
     """Get the list of all possible ngrams for a given phrase.
 

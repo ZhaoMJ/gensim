@@ -461,7 +461,7 @@ class NgramPhrase(BaseWordEmbeddingsModel):
         if self.word_ngrams <= 1 and max_n == 0:
             bucket = 0
 
-        self.wv = NgramPhraseKeyedVectors(size, split_char, bucket)
+        self.wv = NgramPhraseKeyedVectors(size, min_n, max_n, split_char, bucket)
         self.wv.pretrained_model = pretrained_model
         self.vocabulary = NgramPhraseVocab(
             max_vocab_size=max_vocab_size, min_count=min_count, sample=sample,

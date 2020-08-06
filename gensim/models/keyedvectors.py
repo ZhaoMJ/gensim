@@ -184,6 +184,7 @@ from gensim.models.utils_any2vec import (
     _save_word2vec_format,
     _load_word2vec_format,
     ft_ngram_hashes,
+    ft_ngram_hashes_weighed,
     ft_ngram_phrase_hashes,
     compute_phrase_ngrams
 )
@@ -2404,7 +2405,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
 
     """
     # FIXME
-    def __init__(self, vector_size, split_char, bucket):
+    def __init__(self, vector_size, min_n, max_n, split_char, bucket, compatible_hash=False):
         super(NgramPhraseKeyedVectors, self).__init__(vector_size=vector_size)
         self.vectors_vocab = None
         self.vectors_vocab_norm = None
@@ -2416,6 +2417,10 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         self.bucket = bucket
         self.ngrams = None
         self.pretrained_model = None
+        self.min_n = min_n
+        self.max_n = max_n
+        self.bucket = bucket
+        self.compatible_hash = compatible_hash
 
     @classmethod
     def load(cls, fname_or_handle, **kwargs):
@@ -2473,7 +2478,7 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             False
 
         """
-        return word in self.vocab
+        return True
 
     def save(self, *args, **kwargs):
         """Save object.
@@ -2533,35 +2538,23 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
             raise KeyError('cannot calculate vector for OOV word without ngrams')
         else:
             word_vec = np.zeros(self.vectors_ngrams.shape[1], dtype=REAL)
-            # FIXME
-            ngram_hashes, ngram_weights = ft_ngram_phrase_hashes(word, self.split_char, self.bucket)
-            if self.pretrained_model:
-                weights = []
-                text_ngrams = compute_phrase_ngrams(word, self.split_char)
-                word_vec = matutils.unitvec(self.pretrained_model[word])
-                for ng in text_ngrams:
-                    ngrams_join = self.split_char.join(ng)
-                    if ngrams_join == '':
-                        weights.append(0.0)
-                        continue
-                    ngram_v = matutils.unitvec(self.pretrained_model[ngrams_join])
-                    weights.append(dot(word_vec, ngram_v))
-                ngram_weights = weights
-
-            text_ngrams = compute_phrase_ngrams(word, self.split_char)
+            ngram_hashes, ngram_weights = ft_ngram_hashes_weighed(word, self.min_n, self.max_n, self.bucket, self.compatible_hash)
             if len(ngram_hashes) == 0:
+                #
+                # If it is impossible to extract _any_ ngrams from the input
+                # word, then the best we can do is return a vector that points
+                # to the origin.  The reference FB implementation does this,
+                # too.
+                #
+                # https://github.com/RaRe-Technologies/gensim/issues/2402
+                #
+                logger.warning('could not extract any ngrams from %r, returning origin vector', word)
                 return word_vec
             norm_factor = 0.0
             for i, nh in enumerate(ngram_hashes):
-                text_ngrams_join = self.split_char.join(text_ngrams[i])
                 if nh in self.ngrams:
                     word_vec += self.vectors_ngrams[nh] * ngram_weights[i]
-                else:
-                    logger.info("cannot find all ngrams")
-                # FIXME
-                # else:
-                #     raise KeyError('cannot find all ngrams')
-                norm_factor += ngram_weights[i]
+                    norm_factor += ngram_weights[i]
             result = word_vec / norm_factor
             if use_norm:
                 result /= sqrt(sum(result ** 2))
@@ -2624,11 +2617,12 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been fully initialized.
 
         """
-        self.buckets_word, self.buckets_weights, self.ngrams = _process_ngramphrase_vocab(
+        self.buckets_word, self.buckets_weights = _process_weighted_fasttext_vocab(
             self.vocab.items(),
-            self.split_char,
+            self.min_n,
+            self.max_n,
             self.bucket,
-            self.pretrained_model
+            self.compatible_hash
         )
 
         rand_obj = np.random
@@ -2648,7 +2642,6 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         #    vectors_ngrams, and vectors_vocab cannot happen at construction
         #    time because the vocab is not initialized at that stage.
         #
-        
         self.vectors_ngrams = rand_obj.uniform(lo, hi, ngrams_shape).astype(REAL)
 
     def update_ngrams_weights(self, seed, old_vocab_len):
@@ -2666,10 +2659,12 @@ class NgramPhraseKeyedVectors(WordEmbeddingsKeyedVectors):
         Call this **after** the vocabulary has been updated.
 
         """
-        self.buckets_word, self.buckets_weights, self.ngrams = _process_ngramphrase_vocab(
+        self.buckets_word, self.buckets_weights = _process_weighted_fasttext_vocab(
             self.vocab.items(),
-            self.split_char,
-            self.bucket
+            self.min_n,
+            self.max_n,
+            self.bucket,
+            self.compatible_hash
         )
 
         rand_obj = np.random
@@ -2786,6 +2781,43 @@ def _process_ngramphrase_vocab(iterable, split_char, num_buckets, pretrained=Non
             ngram_wgts[vocab.index] = np.array(lengths, dtype=np.float32)
 
     return word_indices, ngram_wgts, ngrams
+
+
+def _process_weighted_fasttext_vocab(iterable, min_n, max_n, num_buckets, fb_compatible=True):
+    """
+    Performs a common operation for FastText weight initialization and
+    updates: scan the vocabulary, calculate ngrams and their hashes, keep
+    track of new ngrams, the buckets that each word relates to via its
+    ngrams, etc.
+
+    Parameters
+    ----------
+    iterable : list
+        A list of (word, :class:`Vocab`) tuples.
+    num_buckets : int
+        The number of buckets used by the model.
+
+    Returns
+    -------
+    dict
+        Keys are indices of entities in the vocabulary (words).  Values are
+        arrays containing indices into vectors_ngrams for each ngram of the
+        word.
+
+    """
+    word_indices = {}
+    ngram_wgts = {}
+
+    if num_buckets == 0:
+        # FIXME
+        return {v.index: np.array([], dtype=np.uint32) for w, v in iterable}, ngram_wgts
+
+    for word, vocab in iterable:
+        hashes, lengths = ft_ngram_hashes_weighed(word, min_n, max_n, num_buckets, fb_compatible)
+        word_indices[vocab.index] = np.array(hashes, dtype=np.uint32)
+        ngram_wgts[vocab.index] = np.array(lengths, dtype=np.float32)
+
+    return word_indices, ngram_wgts
 
 
 def _pad_random(m, new_rows, rand):
